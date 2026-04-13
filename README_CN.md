@@ -10,17 +10,11 @@ Homebrew 镜像源管理工具 — 一行命令快速切换镜像源。
 - 配置跨终端会话持久化
 - 支持清华、中科大、阿里云、腾讯云、北外等镜像
 - 零依赖（纯 Shell 脚本）
-- 支持 npm、Homebrew、curl 三种安装方式
+- 支持 Homebrew、curl 两种安装方式
 
 ## 安装
 
-### npm（推荐）
-
-```bash
-npm install -g brew-use
-```
-
-### Homebrew
+### Homebrew（推荐）
 
 ```bash
 brew tap yurongcode/brew-use

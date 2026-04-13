@@ -10,17 +10,11 @@ Homebrew mirror source manager — one command to switch between mirrors.
 - Config persists across shell sessions
 - Supports TUNA, USTC, Aliyun, Tencent, BFSU mirrors
 - Zero dependencies (pure shell script)
-- Install via npm, Homebrew, or curl
+- Install via Homebrew or curl
 
 ## Install
 
-### npm (recommended)
-
-```bash
-npm install -g brew-use
-```
-
-### Homebrew
+### Homebrew (recommended)
 
 ```bash
 brew tap yurongcode/brew-use
