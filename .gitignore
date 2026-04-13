@@ -1,0 +1,6 @@
+*.pub
+yes
+id_rsa*
+id_ed25519*
+*.pem
+.env
