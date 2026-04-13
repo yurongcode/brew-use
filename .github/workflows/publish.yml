@@ -60,7 +60,7 @@ jobs:
             def caveats
               <<~EOS
                 Add the following line to your shell profile (~/.zshrc or ~/.bashrc):
-                  eval "$(brew-use init)"
+                  eval \"$(brew-use init)\"
               EOS
             end
 
