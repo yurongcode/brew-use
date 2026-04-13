@@ -2,6 +2,8 @@
 
 Homebrew mirror source manager — one command to switch between mirrors.
 
+[中文文档](./README_CN.md)
+
 ## Features
 
 - One command to switch Homebrew mirror sources
