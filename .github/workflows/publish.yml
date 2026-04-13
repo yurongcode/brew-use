@@ -1,0 +1,89 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-npm:
+    name: Publish to npm
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    needs: publish-npm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tarball SHA256
+        id: sha
+        run: |
+          URL="https://github.com/yurongcode/brew-use/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          SHA=$(curl -fsSL "$URL" | shasum -a 256 | cut -d' ' -f1)
+          echo "SHA=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Update tap formula
+        uses: actions/checkout@v4
+        with:
+          repository: yurongcode/homebrew-brew-use
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Write updated formula
+        working-directory: tap
+        run: |
+          cat > Formula/brew-use.rb <<EOF
+          class BrewUse < Formula
+            desc "Homebrew mirror source manager - quickly switch between mirrors"
+            homepage "https://github.com/yurongcode/brew-use"
+            url "https://github.com/yurongcode/brew-use/archive/refs/tags/v${{ steps.version.outputs.VERSION }}.tar.gz"
+            sha256 "${{ steps.sha.outputs.SHA }}"
+            license "MIT"
+            head "https://github.com/yurongcode/brew-use.git", branch: "main"
+
+            def install
+              bin.install "bin/brew-use"
+            end
+
+            def caveats
+              <<~EOS
+                Add the following line to your shell profile (~/.zshrc or ~/.bashrc):
+                  eval "$(brew-use init)"
+              EOS
+            end
+
+            test do
+              assert_match "brew-use", shell_output("\#{bin}/brew-use --version")
+            end
+          end
+          EOF
+
+      - name: Commit and push formula
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/brew-use.rb
+          git commit -m "brew-use v${{ steps.version.outputs.VERSION }}"
+          git push

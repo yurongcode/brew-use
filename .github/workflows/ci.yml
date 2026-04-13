@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make executable
+        run: chmod +x bin/brew-use
+
+      - name: Verify script syntax
+        run: bash -n bin/brew-use
+
+      - name: Test --version
+        run: ./bin/brew-use --version | grep -q "brew-use v"
+
+      - name: Test list
+        run: |
+          output=$(./bin/brew-use list)
+          echo "$output" | grep -q "tuna"
+          echo "$output" | grep -q "ustc"
+          echo "$output" | grep -q "aliyun"
+
+      - name: Test set outputs eval-able statements
+        run: |
+          output=$(./bin/brew-use set tuna)
+          echo "$output" | grep -q 'export HOMEBREW_BREW_GIT_REMOTE='
+
+      - name: Test current (no config)
+        run: ./bin/brew-use current | grep -q "Official"
+
+      - name: Test init outputs shell function
+        run: ./bin/brew-use init | grep -q "brew-use()"
