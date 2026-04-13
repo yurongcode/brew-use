@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# brew-use — Homebrew mirror source manager
+# Quickly switch between Homebrew mirrors
+
+set -euo pipefail
+
+VERSION="1.0.0"
+CONF="${BREW_USE_CONF:-$HOME/.brew-use.conf}"
+
+# ─── Colors ───
+if [[ -t 1 ]]; then
+  G='\033[0;32m' R='\033[0;31m' Y='\033[0;33m' B='\033[1m' D='\033[2m' C='\033[0;36m' N='\033[0m'
+else
+  G='' R='' Y='' B='' D='' C='' N=''
+fi
+
+# ─── Mirror Data ───
+# Format per line: name|label|api_domain|bottle_domain|brew_git|core_git
+MIRROR_DATA="
+tuna|TUNA (清华)|https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api|https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles|https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git|https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/homebrew-core.git
+ustc|USTC (中科大)|https://mirrors.ustc.edu.cn/homebrew-bottles/api|https://mirrors.ustc.edu.cn/homebrew-bottles|https://mirrors.ustc.edu.cn/brew.git|https://mirrors.ustc.edu.cn/homebrew-core.git
+aliyun|Aliyun (阿里云)|https://mirrors.aliyun.com/homebrew-bottles/api|https://mirrors.aliyun.com/homebrew-bottles|https://mirrors.aliyun.com/homebrew/brew.git|https://mirrors.aliyun.com/homebrew/homebrew-core.git
+tencent|Tencent (腾讯云)|https://mirrors.cloud.tencent.com/homebrew-bottles/api|https://mirrors.cloud.tencent.com/homebrew-bottles|https://mirrors.cloud.tencent.com/homebrew/brew.git|https://mirrors.cloud.tencent.com/homebrew/homebrew-core.git
+bfsu|BFSU (北外)|https://mirrors.bfsu.edu.cn/homebrew-bottles/api|https://mirrors.bfsu.edu.cn/homebrew-bottles|https://mirrors.bfsu.edu.cn/git/homebrew/brew.git|https://mirrors.bfsu.edu.cn/git/homebrew/homebrew-core.git
+"
+
+_get_field() {
+  echo "$MIRROR_DATA" | grep "^$1|" | head -1 | cut -d'|' -f"$2"
+}
+
+_is_valid() {
+  echo "$MIRROR_DATA" | grep -q "^$1|"
+}
+
+# ─── Commands ───
+
+cmd_set() {
+  local mirror="${1:-}"
+  if [ -z "$mirror" ]; then
+    printf "${R}Error:${N} Missing mirror name\n" >&2
+    echo "Usage: brew-use set <mirror>" >&2
+    echo "Run 'brew-use list' to see available mirrors" >&2
+    return 1
+  fi
+
+  case "$mirror" in
+    default|official|unset|reset)
+      rm -f "$CONF"
+      echo "unset HOMEBREW_API_DOMAIN HOMEBREW_BOTTLE_DOMAIN HOMEBREW_BREW_GIT_REMOTE HOMEBREW_CORE_GIT_REMOTE 2>/dev/null || true"
+      echo "echo '✓ Reset to official Homebrew source'"
+      return 0
+      ;;
+  esac
+
+  if ! _is_valid "$mirror"; then
+    printf "${R}Error:${N} Unknown mirror: ${B}%s${N}\n" "$mirror" >&2
+    echo "Run 'brew-use list' to see available mirrors" >&2
+    return 1
+  fi
+
+  local label api bottle brew_git core_git
+  label=$(_get_field "$mirror" 2)
+  api=$(_get_field "$mirror" 3)
+  bottle=$(_get_field "$mirror" 4)
+  brew_git=$(_get_field "$mirror" 5)
+  core_git=$(_get_field "$mirror" 6)
+
+  # Write config file (sourced on shell startup)
+  cat > "$CONF" <<EOF
+export HOMEBREW_API_DOMAIN="$api"
+export HOMEBREW_BOTTLE_DOMAIN="$bottle"
+export HOMEBREW_BREW_GIT_REMOTE="$brew_git"
+export HOMEBREW_CORE_GIT_REMOTE="$core_git"
+EOF
+
+  # Output eval-able statements for current session
+  echo "export HOMEBREW_API_DOMAIN=\"$api\""
+  echo "export HOMEBREW_BOTTLE_DOMAIN=\"$bottle\""
+  echo "export HOMEBREW_BREW_GIT_REMOTE=\"$brew_git\""
+  echo "export HOMEBREW_CORE_GIT_REMOTE=\"$core_git\""
+  echo "echo '✓ Switched to ${label} mirror'"
+}
+
+cmd_list() {
+  printf "\n  ${B}Available Mirrors:${N}\n\n"
+  echo "$MIRROR_DATA" | while IFS='|' read -r name label _; do
+    [ -z "$name" ] && continue
+    printf "   ${G}%-10s${N}  %s\n" "$name" "$label"
+  done
+  printf "   ${G}%-10s${N}  %s\n" "default" "Official (官方源)"
+  echo ""
+}
+
+cmd_current() {
+  if [ -f "$CONF" ]; then
+    local brew_remote
+    brew_remote=$(grep 'HOMEBREW_BREW_GIT_REMOTE=' "$CONF" | head -1 | cut -d'"' -f2)
+    printf "  Source:  ${B}%s${N}\n" "$brew_remote"
+    echo "$MIRROR_DATA" | while IFS='|' read -r name label api bottle brew_git core_git; do
+      [ -z "$name" ] && continue
+      if [ "$brew_git" = "$brew_remote" ]; then
+        printf "  Mirror:  ${G}%s${N} (%s)\n" "$name" "$label"
+      fi
+    done
+  else
+    printf "  Source:  ${B}Official (默认官方源)${N}\n"
+  fi
+}
+
+cmd_init() {
+  cat <<'INITEOF'
+# brew-use shell integration
+brew-use() {
+  case "${1:-}" in
+    "")
+      if [ -n "${HOMEBREW_BREW_GIT_REMOTE:-}" ]; then
+        echo "Current mirror: $HOMEBREW_BREW_GIT_REMOTE"
+      else
+        echo "Using official Homebrew source"
+      fi
+      ;;
+    set)
+      if [ -z "${2:-}" ]; then
+        echo "Usage: brew-use set <mirror>" >&2
+        return 1
+      fi
+      eval "$(command brew-use _set "$2")"
+      ;;
+    _set)
+      shift
+      command brew-use _set "$@"
+      ;;
+    list|ls)
+      command brew-use list
+      ;;
+    current|show|status)
+      if [ -n "${HOMEBREW_BREW_GIT_REMOTE:-}" ]; then
+        echo "Current mirror: $HOMEBREW_BREW_GIT_REMOTE"
+      else
+        echo "Using official Homebrew source"
+      fi
+      ;;
+    unset|reset|default)
+      eval "$(command brew-use _set default)"
+      ;;
+    help|--help|-h)
+      command brew-use help
+      ;;
+    --version|-v)
+      command brew-use --version
+      ;;
+    *)
+      eval "$(command brew-use _set "$1")"
+      ;;
+  esac
+}
+
+# Load saved configuration
+[ -f "${BREW_USE_CONF:-$HOME/.brew-use.conf}" ] && source "${BREW_USE_CONF:-$HOME/.brew-use.conf}"
+INITEOF
+}
+
+cmd_help() {
+  cat <<HELP
+${B}brew-use${N} v${VERSION} - Homebrew mirror source manager
+
+${B}Usage:${N}
+  brew-use <command> [mirror]
+
+${B}Commands:${N}
+  set <mirror>    Set mirror (outputs eval-able shell statements)
+  list, ls        List available mirrors
+  current         Show current mirror
+  init            Output shell integration code
+  help            Show this help
+  --version       Show version
+
+${B}Quick Switch (after init):${N}
+  brew-use tuna       Switch to TUNA (清华) mirror
+  brew-use ustc       Switch to USTC (中科大) mirror
+  brew-use aliyun     Switch to Aliyun (阿里云) mirror
+  brew-use tencent    Switch to Tencent (腾讯云) mirror
+  brew-use bfsu       Switch to BFSU (北外) mirror
+  brew-use default    Reset to official source
+
+${B}Setup:${N}
+  Add to your shell profile (~/.zshrc or ~/.bashrc):
+    eval "\$(brew-use init)"
+
+  Or use without init (one-shot):
+    eval "\$(brew-use set tuna)"
+
+${B}Config:${N}
+  Config file: ~/.brew-use.conf
+
+HELP
+}
+
+# ─── Main ───
+case "${1:-}" in
+  set|_set)
+    cmd_set "${2:-}"
+    ;;
+  list|ls)
+    cmd_list
+    ;;
+  current|show|status)
+    cmd_current
+    ;;
+  init)
+    cmd_init
+    ;;
+  help|--help|-h)
+    cmd_help
+    ;;
+  --version|-v)
+    echo "brew-use v$VERSION"
+    ;;
+  "")
+    cmd_help
+    ;;
+  *)
+    cmd_set "$1"
+    ;;
+esac

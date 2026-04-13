@@ -1,0 +1,32 @@
+{
+  "name": "brew-use",
+  "version": "1.0.0",
+  "description": "Homebrew mirror source manager - quickly switch between mirrors (TUNA, USTC, Aliyun, etc.)",
+  "bin": {
+    "brew-use": "./bin/brew-use"
+  },
+  "files": [
+    "bin"
+  ],
+  "scripts": {
+    "prepublishOnly": "chmod +x bin/brew-use"
+  },
+  "keywords": [
+    "homebrew",
+    "brew",
+    "mirror",
+    "source",
+    "china",
+    "tuna",
+    "ustc",
+    "aliyun",
+    "switch"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yurongcode/brew-use.git"
+  },
+  "homepage": "https://github.com/yurongcode/brew-use#readme"
+}
